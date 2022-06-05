@@ -1,0 +1,68 @@
+version: "3.9"
+   
+services:
+  db:
+    image: postgres
+    volumes:
+      - ./data/db:/var/lib/postgresql/data
+      - ./db_dump:/db_dump
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+
+  pgadmin:
+    container_name: pgadmin_container
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: pgadmin4@pgadmin.org
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    volumes:
+       - ./pgadmin:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+
+  api:
+    build:
+      context: .
+    command: python api.py
+    volumes:
+      - ./cgc-api:/code
+    ports:
+      - "8888:8888"
+    depends_on:
+      - db
+
+  localtunnel:
+    image: efrecon/localtunnel
+    depends_on:
+      - api
+    command:
+      --local-host api --port 8888 --subdomain ${LOCALTUNNEL_SUBDOMAIN:-default-api-subdomain}
+
+  scrapper:
+    build:
+      context: .
+    command: python scrapper_service.py
+    volumes:
+      - ./cgc-api:/code
+    depends_on:
+      - db
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.bot
+    command: python main.py
+    volumes:
+      - ./dc-bot:/code
+    depends_on:
+      - api
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - 3000:3000
+    depends_on:
+      - db
